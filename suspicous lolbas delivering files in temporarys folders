@@ -1,0 +1,19 @@
+let SuspiciousFolders = 
+dynamic(['C:\\Users\\*\\AppData\\Local\\Temp', 
+'C:\\Users\\*\\AppData\\Roaming', 
+'C:\\ProgramData', 
+'C:\\Users\\*\\Documents']);
+let time_frame = 7d;
+let CreatedFiles = DeviceFileEvents
+| where TimeGenerated >= ago(time_frame)
+| where FolderPath has_any (SuspiciousFolders)
+| where FileName endswith ".dll" or FileName endswith ".exe"
+| project DeviceId, FolderPath, FileName, SHA256, CreatedTime = TimeGenerated;
+let ProcessesEvents = DeviceProcessEvents
+| where TimeGenerated >= ago(time_frame)
+| where FileName in~ ("regsvr32.exe", "rundll32.exe", "mshta.exe")
+| project DeviceId, ProcessCommandLine, InitiatingProcessFileName, ProcessTime = TimeGenerated;
+CreatedFiles
+| join kind=inner (ProcessesEvents) on DeviceId
+| where ProcessCommandLine contains FileName
+| project DeviceId, FolderPath, FileName, SHA256, CreatedTime, ProcessCommandLine, InitiatingProcessFileName, ProcessTime;
